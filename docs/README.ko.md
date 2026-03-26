@@ -1,4 +1,6 @@
-# aqm &nbsp;|&nbsp; [English](../README.md)
+<sub>📖 [English](../README.md)</sub>
+
+# aqm
 
 **AI 에이전트 팀을 YAML로 구축. 코드 없이. API 키 없이.**
 
@@ -129,26 +131,61 @@ aqm serve                             # 웹 UI (localhost:8000)
 
 ## agents.yaml 레퍼런스
 
-### 에이전트 필드
+### 전체 예시
 
-| 필드 | 타입 | 설명 |
-|---|---|---|
-| `id` | `string` | 고유 식별자 (필수) |
-| `runtime` | `claude`/`gemini`/`codex` | LLM 런타임 |
-| `system_prompt` | `string` | Jinja2 템플릿 (`{{ input }}`, `{{ context }}`) |
-| `handoffs` | `list` | `to`, `condition`, `payload` |
-| `gate` | `object` | `type: llm/human`, `prompt`, `max_retries` |
-| `context_strategy` | `string` | `both`/`shared`/`last_only`/`own`/`none` |
-| `mcp` | `list` | MCP 서버 연결 |
-| `human_input` | `bool/object` | `before`/`on_demand`/`both` |
+```yaml
+agents:
+  - id: developer
+    runtime: claude
+    system_prompt: "구현: {{ input }}"
+    handoffs:
+      - to: reviewer
+        condition: always
+      - to: "qa, docs"               # 쉼표 = 팬아웃 (동시 전달)
+        condition: on_approve
+    gate:
+      type: llm                       # llm (자동) | human (수동 승인)
+      prompt: "프로덕션 준비?"
+      max_retries: 3
+    mcp:
+      - server: github                # 단축형 — 자동 npx 패키지
+      - server: filesystem
+        args: ["/path"]
+      - server: custom
+        command: node
+        args: ["./server.js"]
+        env: { KEY: "value" }
+    context_strategy: last_only       # both | shared | last_only | own | none
+    human_input:
+      mode: before                    # before | on_demand | both
+      prompt: "어떤 기능이 필요한가요?"
+    cli_flags: ["--verbose"]          # 런타임에 전달할 추가 플래그
 
-### 세션 필드 (`type: session`)
+  - id: design_session
+    type: session
+    participants: [architect, security]
+    turn_order: round_robin           # round_robin | moderator
+    max_rounds: 5
+    consensus:
+      method: vote                    # vote | moderator_decides
+      keyword: "VOTE: AGREE"
+      require: all                    # all | majority
+    summary_agent: architect
+    chunks:
+      enabled: true
+      initial: ["프로젝트 설정", "인증 구현"]
+```
 
-| 필드 | 설명 |
+### 주요 필드 요약
+
+| 필드 | 작성 예시 |
 |---|---|
-| `participants` | 에이전트 ID 목록 |
-| `consensus` | `method`(vote/moderator), `keyword`, `require`(all/majority) |
-| `max_rounds` / `summary_agent` / `chunks` | 선택사항 |
+| `handoffs` | `[{ to: reviewer }, { to: "qa, docs", condition: on_approve }]` |
+| `gate` | `{ type: llm, prompt: "OK?", max_retries: 3 }` |
+| `mcp` | `[{ server: github }, { server: fs, args: ["/dir"] }]` |
+| `human_input` | `true` 또는 `{ mode: before, prompt: "질문?" }` |
+| `participants` | `[agent_a, agent_b, agent_c]` |
+| `chunks.initial` | `["설정", "구현", "테스트"]` |
 
 ## 비교
 

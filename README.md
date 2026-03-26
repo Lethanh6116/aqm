@@ -1,4 +1,6 @@
-# aqm &nbsp;|&nbsp; [한국어](docs/README.ko.md)
+<sub>📖 [한국어](docs/README.ko.md)</sub>
+
+# aqm
 
 **Build AI agent teams in YAML. No code. No API keys. Just pipelines.**
 
@@ -530,14 +532,27 @@ entry_point: auto    # LLM picks the best agent based on user input
 | `context_strategy` | `"none"` \| `"last_only"` \| `"own"` \| `"shared"` \| `"both"` | `"both"` | What context to inject (token optimization) |
 | `context_window` | `int` | `3` | Recent stages in full; older stages summarized (0 = all) |
 | `human_input` | `boolean` \| `object` | `null` | Human-in-the-loop input (`before`, `on_demand`, `both`) |
-| `handoffs` | `list[Handoff]` | `[]` | Routing rules |
-| `gate` | `object` | `null` | Quality gate |
-| `mcp` | `list[MCPServer]` | `[]` | MCP server connections |
-| `cli_flags` | `list[string]` | `null` | Additional CLI flags for the runtime |
+| `handoffs` | list | `[]` | Routing rules — see **Handoff** format below |
+| `gate` | `object` | `null` | Quality gate — see **Gate** format below |
+| `mcp` | list | `[]` | MCP server connections — see **MCP** format below |
+| `cli_flags` | list of strings | `null` | Additional CLI flags, e.g. `["--verbose"]` |
 | `abstract` | `boolean` | `false` | Template-only agent (not executed) |
 | `extends` | `string` | `null` | Parent agent ID for inheritance |
 
-### Handoff Fields
+### Handoff Format
+
+Each item in `handoffs` is an object:
+
+```yaml
+handoffs:
+  - to: reviewer                    # target agent ID (required)
+    task: "review"                  # label (optional)
+    condition: on_approve           # always | on_approve | on_reject | on_pass | auto
+    payload: "{{ output }}"         # Jinja2 template (default: {{ output }})
+
+  - to: "qa, docs"                  # comma-separated = fan-out to multiple agents
+    condition: always
+```
 
 | Field | Type | Default | Description |
 |---|---|---|---|
@@ -546,11 +561,50 @@ entry_point: auto    # LLM picks the best agent based on user input
 | `condition` | `string` | `"always"` | `always`, `on_approve`, `on_reject`, `on_pass`, `auto`, or expression |
 | `payload` | `string` | `"{{ output }}"` | Jinja2 template: `{{ output }}`, `{{ input }}`, `{{ reject_reason }}`, `{{ gate_result }}` |
 
+### Gate Format
+
+```yaml
+gate:
+  type: llm                         # llm = auto-evaluate | human = manual approval
+  prompt: "Is this production-ready?"
+  max_retries: 3                     # reject → retry up to N times, then fail
+```
+
+### MCP Server Format
+
+```yaml
+mcp:
+  - server: github                   # shorthand — auto-resolved to npx package
+  - server: filesystem
+    args: ["/path/to/dir"]           # CLI arguments
+  - server: custom-tool
+    command: node                    # custom command
+    args: ["./server.js"]
+    env: { API_KEY: "..." }          # environment variables
+```
+
 ### Session Fields (type: session)
+
+```yaml
+- id: design_review
+  type: session
+  participants: [architect, security, frontend]   # agent IDs
+  turn_order: round_robin            # round_robin | moderator
+  max_rounds: 5
+  consensus:
+    method: vote                     # vote | moderator_decides
+    keyword: "VOTE: AGREE"
+    require: all                     # all | majority
+    require_chunks_done: false
+  summary_agent: architect
+  chunks:
+    enabled: true
+    initial: ["Setup project", "Implement auth"]
+```
 
 | Field | Type | Default | Description |
 |---|---|---|---|
-| `participants` | `list[string]` | — | Agent IDs (required) |
+| `participants` | list of agent IDs | — | Required. e.g. `[architect, security]` |
 | `turn_order` | `"round_robin"` \| `"moderator"` | `"round_robin"` | Turn ordering |
 | `max_rounds` | `int` | `10` | Hard limit |
 | `consensus.method` | `"vote"` \| `"moderator_decides"` | `"vote"` | How to detect agreement |
@@ -559,7 +613,7 @@ entry_point: auto    # LLM picks the best agent based on user input
 | `consensus.require_chunks_done` | `boolean` | `false` | Gate on chunk completion |
 | `summary_agent` | `string` | `null` | Final summary producer |
 | `chunks.enabled` | `boolean` | `true` | Enable chunk tracking |
-| `chunks.initial` | `list[string]` | `[]` | Seed chunks |
+| `chunks.initial` | list of strings | `[]` | Seed chunks, e.g. `["Setup", "Auth"]` |
 
 ### config.yaml Reference
 
