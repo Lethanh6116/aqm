@@ -408,7 +408,8 @@ async function validateYaml() {{
     const r = await apiFetch('/api/validate', {{method:'POST', body:JSON.stringify({{yaml_content:content}})}});
     const el = document.getElementById('validationResult');
     if (r.valid) {{
-      el.innerHTML = '<span style="color:var(--green);">\\u2713 Valid (' + (r.agent_count||0) + ' agents)</span>';
+      const count = (r.summary && r.summary.agent_count) || r.agent_count || 0;
+      el.innerHTML = '<span style="color:var(--green);">\\u2713 Valid (' + count + ' agents)</span>';
     }} else {{
       el.innerHTML = '<span style="color:var(--red);">\\u2717 ' + (r.errors||[]).map(e=>e.message||e).join(', ') + '</span>';
     }}

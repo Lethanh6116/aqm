@@ -4,10 +4,16 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from typing import Optional
 
 from fastapi import APIRouter, HTTPException
+from pydantic import BaseModel
 
 from aqm.core.project import get_agents_yaml_path
+
+
+class ValidateRequest(BaseModel):
+    yaml_content: Optional[str] = None
 
 
 def create_validate_router(project_root: Path) -> APIRouter:
@@ -15,15 +21,19 @@ def create_validate_router(project_root: Path) -> APIRouter:
     agents_yaml_path = get_agents_yaml_path(project_root)
 
     @router.post("/api/validate")
-    async def api_validate():
+    async def api_validate(req: ValidateRequest = None):
         import yaml as _yaml
 
-        if not agents_yaml_path.exists():
-            raise HTTPException(400, "No agents.yaml found")
+        # Use provided content or read from disk
+        if req and req.yaml_content:
+            content = req.yaml_content
+        elif agents_yaml_path.exists():
+            content = agents_yaml_path.read_text(encoding="utf-8")
+        else:
+            raise HTTPException(400, "No agents.yaml found and no content provided")
 
         # Read YAML
         try:
-            content = agents_yaml_path.read_text(encoding="utf-8")
             data = _yaml.safe_load(content)
         except Exception as e:
             return {

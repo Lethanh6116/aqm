@@ -263,7 +263,7 @@ pre { background:var(--surface2); border:1px solid var(--border); border-radius:
 .pagination .info { font-size:13px; color:var(--text-dim); }
 
 /* ── YAML Editor ────────────────────────────── */
-.yaml-editor { font-family:'SF Mono','Monaco','Menlo','Consolas',monospace; font-size:13px; line-height:1.6; min-height:300px; resize:vertical; tab-size:2; background:var(--bg); color:var(--text); border:1px solid var(--border); border-radius:6px; padding:12px; }
+.yaml-editor { font-family:'SF Mono','Monaco','Menlo','Consolas',monospace; font-size:13px; line-height:1.6; min-height:70vh; width:100%; resize:vertical; tab-size:2; background:var(--bg); color:var(--text); border:1px solid var(--border); border-radius:6px; padding:16px; }
 
 /* ── Chunk list ─────────────────────────────── */
 .chunk-item { display:flex; align-items:center; gap:12px; padding:10px 0; border-bottom:1px solid var(--border); }
