@@ -106,11 +106,10 @@ aqm's own development uses aqm. Every feature request goes through impact analys
      ├─ on_approve ──► [doc_updater] ── git diff → update only changed sections
      └─ on_reject  ──► [implementer] ── fix and retry
                             │
-                       [branch_manager] ── commit + merge to main
-                            │
-                       [code_reviewer] ── final gate
+                       [code_reviewer] ── quality gate before merge (runtime: gemini)
                             │ gate: llm
-                            └─ on_reject ──► [fixer] ──► [code_reviewer]
+                            ├─ on_approve ──► [branch_manager] ── commit + merge to main
+                            └─ on_reject  ──► [fixer] ──► [code_reviewer]
 ```
 
 ```yaml
@@ -134,10 +133,12 @@ agents:
     context_strategy: last_only
     system_prompt: |
       Run pytest. Create /tmp/aqm_test_<feature>/ with real YAML files.
-      Run aqm validate on each. Report: PASS | FAIL.
+      Run aqm validate on each. Report pytest exit code + PASS | FAIL.
     gate:
       type: llm
-      prompt: "Status is PASS and all regression tests passed? APPROVE."
+      prompt: |
+        APPROVE only if Status=PASS, exit code=0, and zero regression failures.
+        REJECT if any failure exists — partial pass counts as FAIL.
       max_retries: 2
     handoffs:
       - { to: doc_updater, condition: on_approve }
@@ -147,36 +148,37 @@ agents:
     runtime: claude
     context_strategy: last_only
     system_prompt: "Run git diff main. Update only the docs sections that changed."
-    handoffs: [{ to: branch_manager }]
+    handoffs: [{ to: code_reviewer }]
+
+  - id: code_reviewer
+    runtime: gemini                    # Cross-LLM: different perspective before merge
+    context_strategy: last_only
+    system_prompt: "Run git diff main and pytest. Review before merging."
+    gate:
+      type: llm
+      max_retries: 3
+    handoffs:
+      - { to: branch_manager, condition: on_approve }
+      - { to: fixer, condition: on_reject }
 
   - id: branch_manager
     runtime: claude
     context_strategy: last_only
     mcp: [{ server: github }]
-    system_prompt: "Commit changes, merge feature branch into main."
-    handoffs: [{ to: code_reviewer }]
-
-  - id: code_reviewer
-    runtime: claude
-    context_strategy: last_only
-    system_prompt: "Run git diff HEAD~1 and pytest. Review for correctness."
-    gate:
-      type: llm
-      max_retries: 3
-    handoffs: [{ to: fixer, condition: on_reject }]
+    system_prompt: "Review approved. Commit changes, merge feature branch into main."
 
   - id: fixer
     runtime: claude
-    context_strategy: last_only
+    context_strategy: both             # Needs reject reason + full code context
     mcp: [{ server: github }]
-    system_prompt: "Fix review issues. Commit on main. Re-run pytest."
+    system_prompt: "Fix review issues on feature branch. Re-run pytest."
     handoffs: [{ to: code_reviewer }]
 ```
 
 ```bash
 cd aqm
 aqm run "Add --strict flag to aqm validate" --pipeline dev
-# → 7 agents, fully automated: analyze → implement → test → document → merge → review
+# → 7 agents, fully automated: analyze → implement → test → document → review → merge
 ```
 
 Features added this way: `aqm validate --strict`, resource availability checks, retry strategy — all shipped without manually writing a single test or doc update.
