@@ -785,9 +785,43 @@ def status(task_id: str | None) -> None:
                 gate_info = f" [{s.gate_result}]"
                 if s.reject_reason:
                     gate_info += f" ({s.reject_reason})"
+
+            # Duration
+            duration_info = ""
+            if s.started_at and s.finished_at:
+                secs = (s.finished_at - s.started_at).total_seconds()
+                if secs >= 60:
+                    duration_info = f" [dim]({secs / 60:.1f}m)[/]"
+                else:
+                    duration_info = f" [dim]({secs:.0f}s)[/]"
+
+            # Retry info
+            retry_info = ""
+            if s.retry_count and s.retry_count > 0:
+                retry_info = f" [yellow](retried {s.retry_count}x)[/]"
+
+            # Determine line color
+            is_failed = s.output_text and s.output_text.startswith("ERROR:")
+            line_style = "red" if is_failed else ""
+            prefix = f"[{line_style}]" if line_style else ""
+            suffix = f"[/{line_style}]" if line_style else ""
+
             console.print(
-                f"  stage {s.stage_number}: {s.agent_id}"
-                f"{gate_info}"
+                f"  stage {s.stage_number}: {prefix}{s.agent_id}{suffix}"
+                f"{gate_info}{retry_info}{duration_info}"
+            )
+
+            # Show error detail for failed stages
+            if is_failed:
+                error_lines = s.output_text.replace("ERROR: ", "", 1).strip()
+                for line in error_lines.splitlines()[:3]:
+                    console.print(f"    [red dim]↳ {line}[/]")
+
+        # Show task-level error if failed
+        if t.status == TaskStatus.failed and t.metadata.get("error"):
+            console.print(f"\n  [red]Error:[/] {t.metadata['error']}")
+            console.print(
+                f"  [dim]Restart with: aqm restart {t.id}[/]"
             )
     else:
         tasks = queue.list_tasks()
@@ -869,16 +903,35 @@ def list_tasks(status_filter: str | None) -> None:
     table.add_column("Status")
     table.add_column("Agent")
     table.add_column("Stages", justify="right")
+    table.add_column("Time", justify="right")
     table.add_column("Description")
 
     for t in tasks:
         color = status_colors.get(t.status.value, "dim")
+
+        # Compute elapsed: from created_at to last stage finished_at (or now)
+        elapsed_str = "-"
+        if t.stages and t.stages[-1].finished_at:
+            secs = (t.stages[-1].finished_at - t.created_at).total_seconds()
+            elapsed_str = f"{secs / 60:.0f}m" if secs >= 60 else f"{secs:.0f}s"
+        elif t.status.value == "in_progress":
+            from datetime import datetime, timezone as _tz
+            secs = (datetime.now(_tz.utc) - t.created_at).total_seconds()
+            elapsed_str = f"[blue]{secs / 60:.0f}m…[/]"
+
+        # Append error hint for failed tasks
+        desc = t.description[:55]
+        if t.status == TaskStatus.failed and t.metadata.get("error"):
+            short_err = t.metadata["error"][:40]
+            desc += f" [red dim]↳ {short_err}[/]"
+
         table.add_row(
             t.id,
             f"[{color}]{t.status.value}[/{color}]",
             t.current_agent_id or "-",
             str(len(t.stages)),
-            t.description[:60],
+            elapsed_str,
+            desc,
         )
 
     console.print(table)
