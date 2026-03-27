@@ -23,6 +23,31 @@ logger = logging.getLogger(__name__)
 _TEMP_FILES_TO_CLEANUP: list[Path] = []
 
 
+def _strip_cli_artifacts(text: str) -> str:
+    """Remove Claude CLI tool-call progress lines from captured stdout.
+
+    In ``--print`` mode, Claude CLI may write tool-progress indicators
+    (``▶ Read(...)``, ``⎿  ...``, ``✓ ...``, ``✗ ...``) directly to
+    stdout mixed with the model's text response.  Strip these so that
+    downstream agents receive clean output.
+    """
+    lines = text.splitlines()
+    clean = [
+        line for line in lines
+        if not line.lstrip().startswith(("▶ ", "⎿ ", "✓ ", "✗ "))
+    ]
+    # Collapse runs of blank lines left behind after stripping
+    result: list[str] = []
+    prev_blank = False
+    for line in clean:
+        is_blank = not line.strip()
+        if is_blank and prev_blank:
+            continue
+        result.append(line)
+        prev_blank = is_blank
+    return "\n".join(result).strip()
+
+
 def _classify_error(stderr: str, returncode: int) -> str:
     """Classify a CLI error into a coarse category."""
     lower = stderr.lower() if stderr else ""
@@ -246,7 +271,7 @@ class ClaudeCodeRuntime(AbstractRuntime):
                         error_category=error_category,
                     )
 
-                output = result.stdout.strip()
+                output = _strip_cli_artifacts(result.stdout)
 
             logger.info(
                 "[ClaudeCodeRuntime] Agent '%s' completed (%d chars)",

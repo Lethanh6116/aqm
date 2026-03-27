@@ -183,6 +183,18 @@ aqm run "Add --strict flag to aqm validate" --pipeline dev
 
 Features added this way: `aqm validate --strict`, resource availability checks, retry strategy — all shipped without manually writing a single test or doc update.
 
+**Measured pipeline timing** (7 agents, Claude on all stages except code_reviewer on Gemini):
+
+| Stage | Typical duration |
+|---|---|
+| impact_analyzer | ~5 min |
+| implementer | ~4 min |
+| tester | ~4 min |
+| doc_updater | ~2 min |
+| code_reviewer | ~3 min |
+| branch_manager | ~2 min |
+| **Total (clean run)** | **~23 min** |
+
 ### Example 2: Architecture Decision Session
 
 Multiple experts debate until they agree — like a real design meeting.

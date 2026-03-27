@@ -104,6 +104,25 @@ class ContextFile:
             logger.warning("UTF-8 decode failed for %s, using replace mode", path)
             return path.read_text(encoding="utf-8", errors="replace")
 
+    @staticmethod
+    def _extract_report(output_text: str) -> str:
+        """Extract the structured report section from agent output.
+
+        Agents are prompted to emit their final result inside a fenced
+        code block (```).  Any tool-use narration prose that appears
+        before the block is discarded so that ``agent_*.md`` files
+        contain only the structured report — keeping ``context_strategy:
+        own`` useful and token-efficient.
+
+        Falls back to the original text if no fenced block is found
+        (e.g. agents that emit plain-text output).
+        """
+        import re
+        blocks = re.findall(r"```[^\n]*\n(.*?)```", output_text, re.DOTALL)
+        if not blocks:
+            return output_text
+        return "\n\n".join(block.strip() for block in blocks if block.strip())
+
     def append_agent_context(
         self,
         *,
@@ -117,13 +136,18 @@ class ContextFile:
         Only stores the output — input is already in context.md and
         would be duplicated.  The agent's private file serves as a
         lightweight memory of what *this* agent produced.
+
+        The output is passed through ``_extract_report`` first so that
+        tool-use narration prose is stripped and only the structured
+        report (fenced code block) is stored.
         """
         self.ensure_dir()
         now = datetime.now(timezone.utc).isoformat(timespec="seconds")
+        clean_output = self._extract_report(output_text)
         section = (
             f"## [stage {stage_number}]\n"
             f"**Time**: {now}\n\n"
-            f"{output_text}\n\n---\n\n"
+            f"{clean_output}\n\n---\n\n"
         )
         path = self.agent_context_path(agent_id)
         with open(path, "a", encoding="utf-8") as f:

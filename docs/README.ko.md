@@ -132,7 +132,19 @@ aqm run "aqm validate에 --strict 플래그 추가" --pipeline dev
 # → 7개 에이전트, 완전 자동화: 분석 → 구현 → 테스트 → 문서 → 리뷰 → 머지
 ```
 
-이 방식으로 추가된 기능: `aqm validate --strict`, 리소스 가용성 검사 — 테스트나 문서를 직접 작성하지 않고 모두 자동으로 완성.
+이 방식으로 추가된 기능: `aqm validate --strict`, 리소스 가용성 검사, 재시도 전략 — 테스트나 문서를 직접 작성하지 않고 모두 자동으로 완성.
+
+**실측 파이프라인 실행 시간** (7개 에이전트, code_reviewer만 Gemini, 나머지 Claude):
+
+| 단계 | 일반적인 소요 시간 |
+|---|---|
+| impact_analyzer | ~5분 |
+| implementer | ~4분 |
+| tester | ~4분 |
+| doc_updater | ~2분 |
+| code_reviewer | ~3분 |
+| branch_manager | ~2분 |
+| **전체 (정상 실행)** | **~23분** |
 
 ### 아키텍처 세션
 
