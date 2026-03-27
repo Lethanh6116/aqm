@@ -13,6 +13,9 @@ def render_validate() -> str:
   <p style="font-size:14px;color:var(--text-dim);margin-bottom:12px;">
     Validate your .aqm/agents.yaml against the JSON Schema specification.
   </p>
+  <label style="margin-left:16px;font-size:14px;cursor:pointer;">
+    <input type="checkbox" id="strictMode" style="margin-right:4px;"> Strict mode (warnings = errors)
+  </label>
   <button class="btn btn-primary" onclick="runValidation()">Validate Now</button>
 </div>
 
@@ -21,8 +24,9 @@ def render_validate() -> str:
 <script>
 async function runValidation() {
   document.getElementById('validationResult').innerHTML = '<div style="text-align:center;color:var(--text-dim);padding:24px;">Validating...</div>';
+  const strict = document.getElementById('strictMode').checked;
   try {
-    const data = await apiFetch('/api/validate', {method:'POST'});
+    const data = await apiFetch('/api/validate', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({strict: strict})});
     let html = '';
 
     if (data.valid) {
@@ -41,6 +45,22 @@ async function runValidation() {
         html += '<div><strong style="color:var(--red);">' + (i+1) + '.</strong> <code>' + err.path + '</code></div>';
         html += '<div style="margin-top:4px;">' + err.message + '</div>';
         if (err.fix) html += '<div style="margin-top:4px;color:var(--text-dim);font-size:13px;">Fix: ' + err.fix + '</div>';
+        html += '</div>';
+      });
+      html += '</div></div>';
+    }
+
+    // Warnings section
+    if (data.warnings && data.warnings.length) {
+      const warnColor = strict ? 'var(--red)' : '#e6a817';
+      html += '<div class="card" style="margin-top:16px;border-color:' + warnColor + ';">';
+      html += '<h3 style="color:' + warnColor + ';">&#9888; ' + data.warnings.length + ' warning(s)</h3>';
+      html += '<div style="margin-top:12px;">';
+      data.warnings.forEach((w, i) => {
+        html += '<div style="margin-bottom:12px;padding:12px;background:var(--surface2);border-radius:6px;">';
+        html += '<div><strong style="color:' + warnColor + ';">' + (i+1) + '.</strong> <code>' + w.path + '</code></div>';
+        html += '<div style="margin-top:4px;">' + w.message + '</div>';
+        if (w.fix) html += '<div style="margin-top:4px;color:var(--text-dim);font-size:13px;">Fix: ' + w.fix + '</div>';
         html += '</div>';
       });
       html += '</div></div>';
