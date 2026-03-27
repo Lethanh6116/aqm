@@ -1,15 +1,16 @@
 apiVersion: aqm/v0.1
 
 # =============================================================================
-# AQM Self-Development Pipeline (v2 — optimized)
+# AQM Self-Development Pipeline (v3 — safer merge + cross-LLM review)
 # =============================================================================
 # Pipeline for developing the AQM open-source project itself.
-# Request → Impact Analysis → Implement → Test → Docs → Branch/Merge → Review → (Fix)
+# Request → Impact Analysis → Implement → Test → Docs → Review → Merge → (Fix)
 #
-# v2 improvements:
-#   - Removed payload nesting (no re-including {{ input }} → token savings)
-#   - doc_updater uses git diff instead of reading all files upfront
-#   - Clear role boundaries per agent
+# v3 improvements over v2:
+#   - code_reviewer moved BEFORE branch_manager (merge only on approval)
+#   - code_reviewer uses runtime: gemini (cross-LLM verification — dogfooding)
+#   - fixer uses context_strategy: both (needs reject reason + code context)
+#   - tester gate prompt tightened for partial-failure cases
 #
 # Usage:
 #   aqm run "Add retry logic to LLM gate" --pipeline dev
@@ -79,7 +80,7 @@ agents:
       - Keep backward compatibility
       - If modifying schema: update BOTH schema/agents-schema.json AND aqm/schema/agents-schema.json
       - Create git branch: `git checkout -b feature/<short-name>` before changes
-      - Do NOT commit yet — tester will verify first
+      - Do NOT commit yet — tester and reviewer will verify first
 
       ## Output Format (keep concise)
       List only the files you created/modified and a brief summary of each change.
@@ -114,14 +115,16 @@ agents:
       - Run `aqm validate` on each
 
       ### C. Regression
-      - Run `pytest tests/ -v` — report pass/fail count
-      - Any failure is CRITICAL
+      - Run `pytest tests/ -v` and capture the full output including exit code
+      - Any failure (even a single test) is CRITICAL
+      - Report the exact pytest exit code (0 = all pass, non-zero = failures)
 
       ## Output Format (keep under 100 lines)
       ```
       TEST REPORT
       ===========
       Status: PASS | FAIL
+      Pytest Exit Code: <0 or non-zero>
       Regression: X passed, Y failed
       New Tests: X passed
       Integration: X YAML files validated
@@ -129,9 +132,21 @@ agents:
       ```
     gate:
       type: llm
+      # NOTE: script-based gate (e.g. type: script, command: "pytest --tb=short")
+      # would be more reliable here. Use that once supported.
       prompt: |
-        If Status is PASS and regression tests all pass: APPROVE.
-        If CRITICAL issues or regression failures: REJECT.
+        Read the TEST REPORT carefully.
+        APPROVE only if ALL of these are true:
+          - Status is PASS
+          - Pytest Exit Code is exactly 0
+          - Regression shows 0 failed
+          - No CRITICAL issues listed
+        REJECT if ANY of the following:
+          - Status is FAIL
+          - Pytest Exit Code is non-zero
+          - Any regression failure exists (even 1)
+          - Any CRITICAL issue is listed
+          - Partial pass (e.g. "3 passed, 1 failed") counts as FAIL
         JSON: {"decision": "approved" or "rejected", "reason": "..."}
       max_retries: 2
     handoffs:
@@ -178,58 +193,27 @@ agents:
       ```
       Or: "No documentation changes needed."
     handoffs:
-      - to: branch_manager
-        condition: always
-        payload: "Code, tests, and docs are ready. Commit and merge."
-
-  # ---------------------------------------------------------------------------
-  # 5. Branch Manager — commit all changes and merge feature branch into main
-  # ---------------------------------------------------------------------------
-  - id: branch_manager
-    runtime: claude
-    context_strategy: last_only
-    mcp:
-      - server: github
-    system_prompt: |
-      You are a release engineer for the AQM project.
-
-      ## Instructions
-      1. `git status` and `git diff --stat` to review changes
-      2. Ensure you're on feature/* branch (create if needed)
-      3. Stage relevant files: `git add -A` (exclude .env, __pycache__, .pyc)
-      4. Commit: `feat: <description>` or `fix: <description>`
-      5. `git checkout main && git merge feature/<name> --no-ff`
-      6. Do NOT push — user will do that
-
-      ## Output
-      ```
-      GIT OPERATIONS
-      ==============
-      Branch: feature/<name>
-      Commit: <hash> — <message>
-      Merge: → main
-      Status: SUCCESS | FAILED
-      ```
-    handoffs:
       - to: code_reviewer
         condition: always
-        payload: "Merged to main. Review the changes."
+        payload: "Code, tests, and docs are ready on the feature branch. Please review before merging."
 
   # ---------------------------------------------------------------------------
-  # 6. Code Reviewer — final quality gate; rejects to fixer if issues found
+  # 5. Code Reviewer — quality gate BEFORE merge; runs on Gemini for cross-LLM
+  #    verification (dogfooding aqm's core value: different LLM = different eye)
   # ---------------------------------------------------------------------------
   - id: code_reviewer
-    runtime: claude
+    runtime: gemini
     context_strategy: last_only
     system_prompt: |
       You are a senior code reviewer for the AQM framework.
-      Final quality gate before the work is done.
+      You are the final quality gate — the feature branch will only be merged
+      into main if you approve. Review carefully.
 
       ## Instructions
-      1. Run `git log --oneline -5` to see recent commits
-      2. Run `git diff HEAD~1 --stat` to see what changed in the merge
-      3. Run `git diff HEAD~1` to read the actual changes
-      4. Run `pytest tests/ -v` to verify all tests pass
+      1. Run `git log main..HEAD --oneline` to see commits on the feature branch
+      2. Run `git diff main --stat` to see what changed vs main
+      3. Run `git diff main` to read the actual changes
+      4. Run `pytest tests/ -v` to verify all tests still pass
       5. Check:
          - Code follows existing patterns
          - No security issues (command injection, path traversal)
@@ -256,18 +240,52 @@ agents:
         JSON: {"decision": "approved" or "rejected", "reason": "..."}
       max_retries: 3
     handoffs:
+      - to: branch_manager
+        condition: on_approve
+        payload: "Code review passed. Commit and merge the feature branch into main."
       - to: fixer
         condition: on_reject
         payload: |
-          Fix these review issues:
+          Fix these review issues on the feature branch:
           {{ reject_reason }}
 
   # ---------------------------------------------------------------------------
-  # 7. Fixer — address review feedback, re-run tests, commit fixes on main
+  # 6. Branch Manager — commit all changes and merge feature branch into main
+  #    Only runs after code_reviewer approves (never merges broken code)
+  # ---------------------------------------------------------------------------
+  - id: branch_manager
+    runtime: claude
+    context_strategy: last_only
+    mcp:
+      - server: github
+    system_prompt: |
+      You are a release engineer for the AQM project.
+      The code has already been reviewed and approved — your job is to commit
+      and merge cleanly.
+
+      ## Instructions
+      1. `git status` and `git diff --stat` to confirm you're on feature/* branch
+      2. Stage relevant files: `git add -A` (exclude .env, __pycache__, .pyc)
+      3. Commit: `feat: <description>` or `fix: <description>`
+      4. `git checkout main && git merge feature/<name> --no-ff`
+      5. Do NOT push — user will do that
+
+      ## Output
+      ```
+      GIT OPERATIONS
+      ==============
+      Branch: feature/<name>
+      Commit: <hash> — <message>
+      Merge: → main
+      Status: SUCCESS | FAILED
+      ```
+
+  # ---------------------------------------------------------------------------
+  # 7. Fixer — address review feedback on the feature branch, then re-review
   # ---------------------------------------------------------------------------
   - id: fixer
     runtime: claude
-    context_strategy: last_only
+    context_strategy: both
     mcp:
       - server: github
     system_prompt: |
@@ -279,8 +297,8 @@ agents:
       ## Instructions
       1. Fix all [CRITICAL] issues — mandatory
       2. Fix [WARNING] issues — strongly recommended
-      3. Run `pytest tests/ -v` to verify
-      4. Commit on main: `git add -A && git commit -m "fix: address review feedback"`
+      3. Stay on the feature branch (do NOT touch main)
+      4. Run `pytest tests/ -v` to verify fixes didn't break anything
 
       ## Output
       ```
@@ -293,4 +311,4 @@ agents:
     handoffs:
       - to: code_reviewer
         condition: always
-        payload: "Review fixes applied. Re-review requested."
+        payload: "Review fixes applied on feature branch. Re-review requested."
