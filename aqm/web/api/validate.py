@@ -14,6 +14,7 @@ from aqm.core.project import get_agents_yaml_path
 
 class ValidateRequest(BaseModel):
     yaml_content: Optional[str] = None
+    strict: bool = False
 
 
 def create_validate_router(project_root: Path) -> APIRouter:
@@ -97,9 +98,24 @@ def create_validate_router(project_root: Path) -> APIRouter:
         if data.get("imports"):
             features.append(f"{len(data['imports'])} import(s)")
 
+        # Resource & permission warnings (only if schema is valid)
+        warnings = []
+        if not errors:
+            from aqm.core.validate import run_all_checks
+
+            raw_warnings = run_all_checks(data)
+            warnings = [
+                {"path": w.path, "message": w.message, "fix": w.fix}
+                for w in raw_warnings
+            ]
+
+        strict = req.strict if req else False
+        is_valid = len(errors) == 0 and (not strict or len(warnings) == 0)
+
         return {
-            "valid": len(errors) == 0,
+            "valid": is_valid,
             "errors": errors,
+            "warnings": warnings,
             "summary": {
                 "agent_count": len(agents_list),
                 "features": features,

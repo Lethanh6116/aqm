@@ -468,6 +468,7 @@ The web dashboard also supports versioned pull with a version dropdown, and prov
 # Setup
 aqm init                              # Interactive setup wizard
 aqm validate                          # Validate agents.yaml
+aqm validate --strict                 # Treat warnings as errors (exit 1)
 aqm agents                            # Show agent graph
 
 # Run

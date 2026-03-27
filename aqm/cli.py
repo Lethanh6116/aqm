@@ -1134,7 +1134,8 @@ def context(task_id: str) -> None:
     required=False,
 )
 @click.option("--pipeline", "pipeline_name", default=None, help="Pipeline name to validate")
-def validate(path: str | None, pipeline_name: str | None) -> None:
+@click.option("--strict", is_flag=True, default=False, help="Treat warnings as errors (exit 1)")
+def validate(path: str | None, pipeline_name: str | None, strict: bool) -> None:
     """Validate agents.yaml against the JSON Schema."""
     import json
 
@@ -1267,6 +1268,27 @@ def validate(path: str | None, pipeline_name: str | None) -> None:
     )
     if features:
         console.print(f"  Features: {', '.join(features)}")
+
+    # Resource availability & permission checks (post-schema validation)
+    from aqm.core.validate import run_all_checks
+
+    warnings = run_all_checks(data)
+    if warnings:
+        console.print()
+        label = "error" if strict else "warning"
+        color = "red" if strict else "yellow"
+        console.print(
+            f"[{color}]{len(warnings)} {label}(s)[/] found:\n"
+        )
+        for i, w in enumerate(warnings, 1):
+            console.print(f"  [{color}]{i}.[/] [bold]{w.path}[/]")
+            console.print(f"     {w.message}")
+            if w.fix:
+                console.print(f"     [dim]Fix: {w.fix}[/]")
+            console.print()
+
+        if strict:
+            sys.exit(1)
 
 
 # ── serve ───────────────────────────────────────────────────────────────

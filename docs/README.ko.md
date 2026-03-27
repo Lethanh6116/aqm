@@ -101,6 +101,7 @@ agents:
 # 설정
 aqm init                              # 대화형 설정
 aqm validate                          # YAML 검증
+aqm validate --strict                 # 경고를 오류로 처리 (exit 1)
 aqm agents                            # 에이전트 그래프
 
 # 실행
