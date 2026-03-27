@@ -138,16 +138,15 @@ aqm run "aqm validate에 --strict 플래그 추가" --pipeline dev
 
 | 단계 | T-4D9511 정상 실행 | T-8A833D 재시작 포함 |
 |---|---|---|
-| impact_analyzer | — ¹ | — ¹ |
+| impact_analyzer | 6분 | 3분 |
 | implementer | 12분 | 6분 |
-| tester | 4분 | 5분 |
-| doc_updater | 1.5분 | 13.5분 ² |
+| tester | 3분 | 5분 |
+| doc_updater | 1.5분 | 1분 |
 | branch_manager | 1분 | 1분 |
 | code_reviewer | 5분 | 1분 |
-| **전체 (2–6단계 합계)** | **23.5분** | **25.8분** |
+| **전체** | **29분** | **16분** (+ 실패 대기 13분 ¹) |
 
-¹ impact_analyzer 시작 시간 미기록 (약 5분 추가 소요)
-² doc_updater 1회 실패 후 `aqm restart --from-stage 4`로 복구
+¹ doc_updater 첫 시도 실패 후 수동으로 `aqm restart --from-stage 4` 실행 — 벽시계 기준 총 ~29분
 
 ### 아키텍처 세션
 

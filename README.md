@@ -187,16 +187,15 @@ Features added this way: `aqm validate --strict`, resource availability checks, 
 
 | Stage | T-4D9511 clean run | T-8A833D with restart |
 |---|---|---|
-| impact_analyzer | — ¹ | — ¹ |
+| impact_analyzer | 6 min | 3 min |
 | implementer | 12 min | 6 min |
-| tester | 4 min | 5 min |
-| doc_updater | 1.5 min | 13.5 min ² |
+| tester | 3 min | 5 min |
+| doc_updater | 1.5 min | 1 min |
 | branch_manager | 1 min | 1 min |
 | code_reviewer | 5 min | 1 min |
-| **Total (stages 2–6)** | **23.5 min** | **25.8 min** |
+| **Total** | **29 min** | **16 min** (+ 13 min failure gap ¹) |
 
-¹ impact_analyzer start time not recorded; typically adds ~5 min
-² doc_updater failed once and recovered via `aqm restart --from-stage 4`
+¹ doc_updater failed on first attempt; wall-clock time including manual `aqm restart --from-stage 4` was ~29 min
 
 ### Example 2: Architecture Decision Session
 
