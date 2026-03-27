@@ -121,7 +121,10 @@ class ContextFile:
         blocks = re.findall(r"```[^\n]*\n(.*?)```", output_text, re.DOTALL)
         if not blocks:
             return output_text
-        return "\n\n".join(block.strip() for block in blocks if block.strip())
+        non_empty = [block.strip() for block in blocks if block.strip()]
+        if not non_empty:
+            return output_text
+        return "\n\n".join(non_empty)
 
     def append_agent_context(
         self,
