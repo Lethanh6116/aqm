@@ -1,8 +1,0 @@
-default_pipeline: dev
-pipeline:
-  max_stages: 30
-gate:
-  model: claude-sonnet-4-20250514
-  timeout: 180
-timeouts:
-  claude: 900
